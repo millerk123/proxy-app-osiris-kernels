@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+*.e
+
+# Kokkos files
+Kokkos*
