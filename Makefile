@@ -24,7 +24,8 @@ KOKKOS_DEVICES=Cuda
 KOKKOS_CXX_STANDARD = c++14
 
 
-SRC = cuda-code.cu
+# SRC = cuda-code.cu
+SRC = kokkos-code.cu
 
 OBJ := $(patsubst %.cu,$(builddir)/%.o,$(SRC))
 
