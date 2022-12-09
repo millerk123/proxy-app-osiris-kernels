@@ -139,7 +139,7 @@ __global__ void DUDT_BORIS_2D( char *chunks, int nchunks_per_block, int nchunks,
 
   const int bx = blockIdx.x;
   const int tx = threadIdx.x;
-  const int bx_tot = blockDim.x;
+  const int bx_tot = gridDim.x;
 
   const size_t x_offset = 0;
   const size_t p_offset = x_offset + 2 * sizeof(double) * chunk_size;
@@ -196,8 +196,8 @@ __global__ void DUDT_BORIS_2D( char *chunks, int nchunks_per_block, int nchunks,
       // --------------
       // dudt_boris()
       // --------------
-      i1 = ix[part_idx+0*chunk_size] - 1;
-      i2 = ix[part_idx+1*chunk_size] - 1;
+      i1 = ix[part_idx+0*chunk_size];
+      i2 = ix[part_idx+1*chunk_size];
 
       dx1 = x[part_idx+0*chunk_size];
       dx2 = x[part_idx+1*chunk_size];
@@ -551,8 +551,8 @@ __global__ void ADVANCE_DEPOSIT_2D( char *chunks, int nchunks_per_block, int nch
         y1[ind] = xint[1];
         qq[ind] = q[part_idx];
         vz[ind] = vzint[0];
-        ii[ind] = ix[part_idx+0*chunk_size] - 1;
-        jj[ind] = ix[part_idx+1*chunk_size] - 1;
+        ii[ind] = ix[part_idx+0*chunk_size];
+        jj[ind] = ix[part_idx+1*chunk_size];
 
         if (my_num_par>1) {
 
@@ -570,8 +570,8 @@ __global__ void ADVANCE_DEPOSIT_2D( char *chunks, int nchunks_per_block, int nch
           y1[ind] = xint[3] - dxi_fac_x[1]*dxi[1];
           qq[ind] = q[part_idx];
           vz[ind] = vzint[1];
-          ii[ind] = ix[part_idx+0*chunk_size] + dxi_fac_i[0]*dxi[0] - 1;
-          jj[ind] = ix[part_idx+1*chunk_size] + dxi_fac_i[1]*dxi[1] - 1;
+          ii[ind] = ix[part_idx+0*chunk_size] + dxi_fac_i[0]*dxi[0];
+          jj[ind] = ix[part_idx+1*chunk_size] + dxi_fac_i[1]*dxi[1];
 
           if (my_num_par==3) {
 
@@ -582,8 +582,8 @@ __global__ void ADVANCE_DEPOSIT_2D( char *chunks, int nchunks_per_block, int nch
             y1[ind] = xbuf[1] - dxi[1];
             qq[ind] = q[part_idx];
             vz[ind] = vzint[2];
-            ii[ind] = ix[part_idx+0*chunk_size] + dxi[0] - 1;
-            jj[ind] = ix[part_idx+1*chunk_size] + dxi[1] - 1;
+            ii[ind] = ix[part_idx+0*chunk_size] + dxi[0];
+            jj[ind] = ix[part_idx+1*chunk_size] + dxi[1];
 
           }
 
@@ -681,11 +681,11 @@ int main(void)
   int nblocks_requested = 16; // Number of blocks requested
 
   // Parameters calculated from above
-  int nguard = 1; // Number of guard cells
+  int nguard = 2; // Number of guard cells
   int lb = -nguard; int ub = ncells + nguard;
   int stride = ncells + 2*nguard;
   int tot_cells = 3 * stride * stride;
-  int offset = 3 * ( stride + nguard );
+  int offset = 3 * ( nguard + nguard * stride );
   int npart = ncells * ncells * ppc * ppc;
   int nchunks = ( npart + nchunk - 1 ) / nchunk;
   double dxp = 1.0 / ppc;
@@ -829,9 +829,9 @@ int main(void)
   DUDT_BORIS_2D<32> <<< nblocks, 32 >>>( d_chunks, nchunks_per_block, nchunks,
                                          ntils, npart, stride, -1.0, d_b, d_e, 0.1, nchunk );
 
-  ADVANCE_DEPOSIT_2D<32> <<< nblocks, 32 >>>( d_chunks, nchunks_per_block, nchunks, ntils,
-                                              npart, stride, 0.142, 0.142, d_jay, 0.1,
-                                              nchunk );
+  // ADVANCE_DEPOSIT_2D<32> <<< nblocks, 32 >>>( d_chunks, nchunks_per_block, nchunks, ntils,
+  //                                             npart, stride, 0.142, 0.142, d_jay, 0.1,
+  //                                             nchunk );
 
   // Print old particle momentum
   for (int i=0; i < ntils; i++) {
