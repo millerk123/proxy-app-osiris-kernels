@@ -22,6 +22,7 @@ KOKKOS_PATH = /global/homes/m/millerk1/kokkos
 CUDA_PATH = $(CUDA_HOME)
 KOKKOS_DEVICES=Cuda
 KOKKOS_CXX_STANDARD = c++14
+KOKKOS_OPTIONS = aggressive_vectorization
 
 
 # SRC = cuda-code.cu

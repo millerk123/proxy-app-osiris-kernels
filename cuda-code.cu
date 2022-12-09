@@ -674,11 +674,11 @@ __global__ void ADVANCE_DEPOSIT_2D( char *chunks, int nchunks_per_block, int nch
 int main(void)
 {
   // Set up number of tiles, doing 2D, linear interpolation
-  int ntils = 2; // Number of tiles
-  int ppc = 2; // Number of particles per cell in each direction
-  int ncells = 6; // ncells x ncells cells in a tile
-  int nchunk = 32; // Number of particles in one chunk
-  int nblocks_requested = 16; // Number of blocks requested
+  int ntils = 144*144; // Number of tiles
+  int ppc = 20; // Number of particles per cell in each direction
+  int ncells = 8; // ncells x ncells cells in a tile
+  int nchunk = 512; // Number of particles in one chunk
+  int nblocks_requested = 20000; // Number of blocks requested
 
   // Parameters calculated from above
   int nguard = 2; // Number of guard cells
@@ -693,6 +693,7 @@ int main(void)
 
   srand(1);
 
+  printf("Initializing fields...\n");
   // Initialize field and current arrays
   double *e[ntils], *b[ntils], *jay[ntils];
   for (int i = 0; i < ntils; i++) {
@@ -713,6 +714,7 @@ int main(void)
     }
   }
 
+  printf("Initializing particles...\n");
   // Initialize particle arrays
   double **x[ntils], **p[ntils], **q[ntils];
   int **ix[ntils];
@@ -767,6 +769,7 @@ int main(void)
   // Host array of device pointers to first non-guard cell (to copy in)
   double *d_e_0[ntils], *d_b_0[ntils], *d_jay_0[ntils];
 
+  printf("Transferring fields...\n");
   for (int i = 0; i < ntils; i++) {
     // Allocate device arrays
     cudaMalloc( &d_e_arr[i], tot_cells*sizeof(double) );
@@ -806,6 +809,7 @@ int main(void)
   double *d_x[ntils*nchunks], *d_p[ntils*nchunks], *d_q[ntils*nchunks];
   int *d_ix[ntils*nchunks];
 
+  printf("Transferring particles...\n");
   for (int i = 0; i < ntils; i++) {
     for (int j=0; j < nchunks; j++) {
       d_x[j+i*nchunks] = (double*) ( d_chunks + x_offset + (j+i*nchunks) * chunk_mem );
@@ -826,32 +830,36 @@ int main(void)
   int nchunks_per_block = max( (nchunks*ntils) / nblocks_requested, 1 );
   int nblocks = max( nchunks / nchunks_per_block, 1 ) * ntils;
 
-  DUDT_BORIS_2D<32> <<< nblocks, 32 >>>( d_chunks, nchunks_per_block, nchunks,
-                                         ntils, npart, stride, -1.0, d_b, d_e, 0.1, nchunk );
+  printf("Running kernel.\n");
+  for (int i = 0; i < 1000; i++) {
+    DUDT_BORIS_2D<32> <<< nblocks, 32 >>>( d_chunks, nchunks_per_block, nchunks,
+                                           ntils, npart, stride, -1.0, d_b, d_e, 0.1, nchunk );
+  }
 
   // ADVANCE_DEPOSIT_2D<32> <<< nblocks, 32 >>>( d_chunks, nchunks_per_block, nchunks, ntils,
   //                                             npart, stride, 0.142, 0.142, d_jay, 0.1,
   //                                             nchunk );
 
   // Print old particle momentum
-  for (int i=0; i < ntils; i++) {
-    for (int k=0; k < ncells; k++) {
-      for (int j=0; j < ncells; j++) {
-        for (int l=0; l < ppc*ppc; l++) {
-          int id = l + ( j + k*ncells ) * ppc*ppc;
-          int chunk_id = id / nchunk;
-          int p_id = id - chunk_id * nchunk;
-          printf("%d, %d, %g, %g, %g, %g\n",ix[i][chunk_id][p_id],ix[i][chunk_id][p_id+nchunk],x[i][chunk_id][p_id],x[i][chunk_id][p_id+nchunk],p[i][chunk_id][p_id],p[i][chunk_id][p_id+nchunk]);
-        }
-      }
-    }
-  }
+  // for (int i=0; i < ntils; i++) {
+  //   for (int k=0; k < ncells; k++) {
+  //     for (int j=0; j < ncells; j++) {
+  //       for (int l=0; l < ppc*ppc; l++) {
+  //         int id = l + ( j + k*ncells ) * ppc*ppc;
+  //         int chunk_id = id / nchunk;
+  //         int p_id = id - chunk_id * nchunk;
+  //         printf("%d, %d, %g, %g, %g, %g\n",ix[i][chunk_id][p_id],ix[i][chunk_id][p_id+nchunk],x[i][chunk_id][p_id],x[i][chunk_id][p_id+nchunk],p[i][chunk_id][p_id],p[i][chunk_id][p_id+nchunk]);
+  //       }
+  //     }
+  //   }
+  // }
 
-  printf("----------------\n");
+  // printf("----------------\n");
 
+  printf("Copying back one chunk per tile.\n");
   // Copy back particle data
   for (int i = 0; i < ntils; i++) {
-    for (int j=0; j < nchunks; j++) {
+    for (int j=0; j < 1; j++) {
 
       // Copy in particle data
       cudaMemcpy( x[i][j], d_x[j+i*nchunks], 2*nchunk*sizeof(double), cudaMemcpyDeviceToHost );
@@ -861,19 +869,20 @@ int main(void)
   }
 
   // Print new particle momentum
-  for (int i=0; i < ntils; i++) {
-    for (int k=0; k < ncells; k++) {
-      for (int j=0; j < ncells; j++) {
-        for (int l=0; l < ppc*ppc; l++) {
-          int id = l + ( j + k*ncells ) * ppc*ppc;
-          int chunk_id = id / nchunk;
-          int p_id = id - chunk_id * nchunk;
-          printf("%d, %d, %g, %g, %g, %g\n",ix[i][chunk_id][p_id],ix[i][chunk_id][p_id+nchunk],x[i][chunk_id][p_id],x[i][chunk_id][p_id+nchunk],p[i][chunk_id][p_id],p[i][chunk_id][p_id+nchunk]);
-        }
-      }
-    }
-  }
+  // for (int i=0; i < ntils; i++) {
+  //   for (int k=0; k < ncells; k++) {
+  //     for (int j=0; j < ncells; j++) {
+  //       for (int l=0; l < ppc*ppc; l++) {
+  //         int id = l + ( j + k*ncells ) * ppc*ppc;
+  //         int chunk_id = id / nchunk;
+  //         int p_id = id - chunk_id * nchunk;
+  //         printf("%d, %d, %g, %g, %g, %g\n",ix[i][chunk_id][p_id],ix[i][chunk_id][p_id+nchunk],x[i][chunk_id][p_id],x[i][chunk_id][p_id+nchunk],p[i][chunk_id][p_id],p[i][chunk_id][p_id+nchunk]);
+  //       }
+  //     }
+  //   }
+  // }
 
+  printf("Freeing memory...\n");
   for (int i = 0; i < ntils; i++) {
     e[i] -= offset;
     b[i] -= offset;

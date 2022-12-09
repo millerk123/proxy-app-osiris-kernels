@@ -931,11 +931,11 @@ int main(void)
   {
 
     // Set up number of tiles, doing 2D, linear interpolation
-    int ntils = 2; // Number of tiles
-    int ppc = 2; // Number of particles per cell in each direction
-    int ncells = 6; // ncells x ncells cells in a tile
-    int nchunk = 32; // Number of particles in one chunk
-    int nblocks_requested = 16; // Number of blocks requested
+    int ntils = 144*144; // Number of tiles
+    int ppc = 20; // Number of particles per cell in each direction
+    int ncells = 8; // ncells x ncells cells in a tile
+    int nchunk = 512; // Number of particles in one chunk
+    int nblocks_requested = 20000; // Number of blocks requested
 
     // Parameters calculated from above
     int nguard = 2; // Number of guard cells
@@ -950,6 +950,7 @@ int main(void)
 
     srand(1);
 
+    printf("Initializing fields...\n");
     // Initialize field and current arrays
     double *e[ntils], *b[ntils], *jay[ntils];
     for (int i = 0; i < ntils; i++) {
@@ -970,6 +971,7 @@ int main(void)
       }
     }
 
+    printf("Initializing particles...\n");
     // Initialize particle arrays
     double **x[ntils], **p[ntils], **q[ntils];
     int **ix[ntils];
@@ -1026,6 +1028,7 @@ int main(void)
     // Kokkos::Experimental::OffsetView<double****> d_b(d_b_0, begins);
     // Kokkos::Experimental::OffsetView<double****> d_jay(d_jay_0, begins);
 
+    printf("Transferring fields...\n");
     // Initialize the field arrays
     for (int i = 0; i < ntils; i++) {
       // Create unmanaged view of existing field data
@@ -1048,6 +1051,7 @@ int main(void)
     Kokkos::View<double***> d_q("d_q", nchunk, 1, ntils*nchunks);
     Kokkos::View<int***> d_ix("d_ix", nchunk, 2, ntils*nchunks);
 
+    printf("Transferring particles...\n");
     for (int i = 0; i < ntils; i++) {
       for (int j=0; j < nchunks; j++) {
         // Copy in particle data
@@ -1083,32 +1087,36 @@ int main(void)
 
     Kokkos::TeamPolicy<> policy( nblocks, 32 );
 
-    Kokkos::parallel_for(policy, DUDT(d_x, d_p, d_q, d_ix, nchunks_per_block, nchunks,
-                                      ntils, npart, -1.0, d_e_0, d_b_0, 0.1, nchunk, nguard));
+    printf("Running kernel.\n");
+    for (int i = 0; i < 1000; i++) {
+      Kokkos::parallel_for(policy, DUDT(d_x, d_p, d_q, d_ix, nchunks_per_block, nchunks,
+                                        ntils, npart, -1.0, d_e_0, d_b_0, 0.1, nchunk, nguard));
+    }
 
     // ADVANCE_DEPOSIT_2D<32> <<< nblocks, 32 >>>( d_chunks, nchunks_per_block, nchunks, ntils,
     //                                             npart, stride, 0.142, 0.142, d_jay, 0.1,
     //                                             nchunk );
 
     // Print old particle momentum
-    for (int i=0; i < ntils; i++) {
-      for (int k=0; k < ncells; k++) {
-        for (int j=0; j < ncells; j++) {
-          for (int l=0; l < ppc*ppc; l++) {
-            int id = l + ( j + k*ncells ) * ppc*ppc;
-            int chunk_id = id / nchunk;
-            int p_id = id - chunk_id * nchunk;
-            printf("%d, %d, %g, %g, %g, %g\n",ix[i][chunk_id][p_id],ix[i][chunk_id][p_id+nchunk],x[i][chunk_id][p_id],x[i][chunk_id][p_id+nchunk],p[i][chunk_id][p_id],p[i][chunk_id][p_id+nchunk]);
-          }
-        }
-      }
-    }
+    // for (int i=0; i < ntils; i++) {
+    //   for (int k=0; k < ncells; k++) {
+    //     for (int j=0; j < ncells; j++) {
+    //       for (int l=0; l < ppc*ppc; l++) {
+    //         int id = l + ( j + k*ncells ) * ppc*ppc;
+    //         int chunk_id = id / nchunk;
+    //         int p_id = id - chunk_id * nchunk;
+    //         printf("%d, %d, %g, %g, %g, %g\n",ix[i][chunk_id][p_id],ix[i][chunk_id][p_id+nchunk],x[i][chunk_id][p_id],x[i][chunk_id][p_id+nchunk],p[i][chunk_id][p_id],p[i][chunk_id][p_id+nchunk]);
+    //       }
+    //     }
+    //   }
+    // }
 
-    printf("----------------\n");
+    // printf("----------------\n");
 
+    printf("Copying back one chunk per tile.\n");
     // Copy back particle data
     for (int i = 0; i < ntils; i++) {
-      for (int j=0; j < nchunks; j++) {
+      for (int j=0; j < 1; j++) {
 
         // Copy in particle data
 
@@ -1137,19 +1145,20 @@ int main(void)
     }
 
     // Print new particle momentum
-    for (int i=0; i < ntils; i++) {
-      for (int k=0; k < ncells; k++) {
-        for (int j=0; j < ncells; j++) {
-          for (int l=0; l < ppc*ppc; l++) {
-            int id = l + ( j + k*ncells ) * ppc*ppc;
-            int chunk_id = id / nchunk;
-            int p_id = id - chunk_id * nchunk;
-            printf("%d, %d, %g, %g, %g, %g\n",ix[i][chunk_id][p_id],ix[i][chunk_id][p_id+nchunk],x[i][chunk_id][p_id],x[i][chunk_id][p_id+nchunk],p[i][chunk_id][p_id],p[i][chunk_id][p_id+nchunk]);
-          }
-        }
-      }
-    }
+    // for (int i=0; i < ntils; i++) {
+    //   for (int k=0; k < ncells; k++) {
+    //     for (int j=0; j < ncells; j++) {
+    //       for (int l=0; l < ppc*ppc; l++) {
+    //         int id = l + ( j + k*ncells ) * ppc*ppc;
+    //         int chunk_id = id / nchunk;
+    //         int p_id = id - chunk_id * nchunk;
+    //         printf("%d, %d, %g, %g, %g, %g\n",ix[i][chunk_id][p_id],ix[i][chunk_id][p_id+nchunk],x[i][chunk_id][p_id],x[i][chunk_id][p_id+nchunk],p[i][chunk_id][p_id],p[i][chunk_id][p_id+nchunk]);
+    //       }
+    //     }
+    //   }
+    // }
 
+    printf("Freeing memory...\n");
     for (int i = 0; i < ntils; i++) {
       e[i] -= offset;
       b[i] -= offset;
